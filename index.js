@@ -15,39 +15,19 @@ function Promise(fn) {
   this.list = [];//list的作用就是为了当在一个promise中
   excute(fn, this);
 }
-/**
- * handlehandle(promise, map)的作用:
- * 注意:map.promise就是调用then要返回的新的Promise,所以下面用thenPromise代替
- * 当promise.state === 0 执行 promise.list.push(map); promise.flag 还是 false
- * 当promise.state === 1 当then(a,b)中的a为null的时候   在异步队列中执行  thenPromise.value = promise.value
- *                       当then(a,b)中的a为函数的时候   在异步队列中执行  resolve(thenPromise,a(promise.value))
- * 当promise.state === 2 当then(a,b)中的b为null的时候   在异步队列中执行  thenPromise.value = promise.value
- *                       当then(a,b)中的b为函数的时候   在异步队列中执行  resolve(thenPromise,b(promise.value))
- * 当promise.state === 3 执行 promise = promise.value
- */
-
 function handle(promise, map) {
-  //promise.state === 3的时候promise.value就是一个Promise
   while (promise.state === 3) {
     promise = promise.value;
   }
-  //pending
   if (promise.state === 0) {
+    console.log('000000');
     promise.list.push(map);
     return;
   }
   promise.flag = true;
-  //resolved或者rejected
   setTimeout(function() {
     var cb = promise.state === 1 ? map.onFulfilled : map.onRejected;
     if (cb === null) {
-      /**
-       * map.promise = {
-       *   state: *
-       *   value: promise.value
-       *   ...
-       * }
-       */
       (promise.state === 1 ? resolve : reject)(map.promise, promise.value);
       return;
     }
@@ -55,54 +35,19 @@ function handle(promise, map) {
     try {
       ret = cb(promise.value);
     } catch (e) {
-      /**
-       * map.promise = {
-       *   state: *
-       *   value: e
-       *   ...
-       * }
-       */
       reject(map.promise, e);
       return;
     }
-    /**
-     * 当ret为Promise
-     * map.promise = {
-     *   state: 3
-     *   value: ret
-     *   ...
-     * }
-     * 当ret中then方法，继续递归
-     * 当ret为非Promise且没有then方法
-     * map.promise = {
-     *   state: 1
-     *   value: ret
-     *   ...
-     * }
-     */
     resolve(map.promise, ret);
   },0);
 }
-/**********************************************************************************************************************************************************************************************
-excute(fn,promise)-----通过fn中的resolve、reject修改promise的state、value等等
-resolve(val)-----将promise的state修改为1，value修改为val
-
-
-
-                    ┌───────参数是thenable,excute(val.then,promise)───────┐                                                   ┌─────────────────────────────────────────────┐
-                    ↓                                                    │                                                   │                                             │
-promise───────────>excute(fn,promise)──────fn中存在resolve(val)──────────>resolve(promise,val)────────val是一个Promise───────>finale(promise)─────0<promise.list.length────>handle
- ↑                  │                                                    │                                                   │                                             │
- └──────────────────┘
-
- **********************************************************************************************************************************************************************************************/
 
 function excute(fn, promise) {
   var done = false;
   try {
     fn(
       function(value) {
-        if (done){ return; } done = true;
+        if (done){ return; } done = true;//保证了resolve和reject被其他地方截获之后也不能被利用去改变promise的状态
         resolve(promise, value);
       },
       function(error) {
@@ -149,11 +94,7 @@ function reject(promise, val) {
   promise.value = val;
   finale(promise);
 }
-/**
- * 当state为2并且defferreds中没有东西的时候新开一个异步任务
- * @param  {[type]} promise [description]
- * @return {[type]}      [description]
- */
+
 function finale(promise) {
   //rejected
   if (promise.state === 2 && promise.list.length === 0) {
@@ -164,11 +105,6 @@ function finale(promise) {
     },0);
   }
 
-  /**
-   * promise.list.forEach(function(map){
-   *     handle(promise,map)
-   * })
-   */
   for (var i = 0, len = promise.list.length; i < len; i++) {
     handle(promise, promise.list[i]);
   }
